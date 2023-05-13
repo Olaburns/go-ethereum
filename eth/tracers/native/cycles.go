@@ -1,15 +1,5 @@
-package native
-
-/* TODO Automatically exlcude this file depending on the machine it was build on
-import (
-	"encoding/json"
-	"fmt"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/eth/tracers"
-	"github.com/opentracing-contrib/perfevents/go"
-	"math/big"
-)
+//go:build linux
+// +build linux
 
 // Copyright 2021 The go-ethereum Authors
 // This file is part of the go-ethereum library.
@@ -30,12 +20,13 @@ import (
 package native
 
 import (
-"encoding/json"
-"fmt"
-"github.com/ethereum/go-ethereum/common"
-"github.com/ethereum/go-ethereum/core/vm"
-"github.com/ethereum/go-ethereum/eth/tracers"
-"math/big"
+	"encoding/json"
+	"fmt"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/eth/tracers"
+	"github.com/hodgesds/perf-utils"
+	"math/big"
 )
 
 func init() {
@@ -43,27 +34,20 @@ func init() {
 }
 
 type cycleTracer struct {
-	opcodes     	[]vm.OpCode
-	cost        	[]int
-	remainingGas	int
-	pds 			[]perfevents.PerfEventInfo
-	cycles			[]int
-	cacheMisses 	[]int
-	instructions 	[]int
-	errors			[]error
-	isFirst			bool
+	opcodes      []vm.OpCode
+	cycles       []int
+	cost         []int
+	cb           func() error
+	fd           interface{}
+	remainingGas int
 }
 
-// newcycleTracer returns a new noop tracer.
+// newTimingTracer returns a new noop tracer.
 func newCycleTracer(ctx *tracers.Context, _ json.RawMessage) (tracers.Tracer, error) {
 	t := &cycleTracer{
-		opcodes: []vm.OpCode{},
+		opcodes:      []vm.OpCode{},
+		cycles:       []int{},
 		remainingGas: 0,
-		cycles: []int{},
-		instructions: []int{},
-		cacheMisses: []int{},
-		errors: []error{},
-		isFirst: true,
 	}
 
 	return t, nil
@@ -71,24 +55,19 @@ func newCycleTracer(ctx *tracers.Context, _ json.RawMessage) (tracers.Tracer, er
 
 // CaptureStart implements the EVMLogger interface to initialize the tracing operation.
 func (t *cycleTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
-	err, _, pds := perfevents.InitOpenEventsEnableSelf("cpu-cycles,cache-misses,instructions")
-	if err != nil {
-		t.errors = append(t.errors, err)
-	}
-	t.pds = pds
+	cb, fd := perf.StartCPUCycles()
+	t.cb = cb
+	t.cb = fd
 }
 
 // CaptureEnd is called after the call finishes to finalize the tracing.
 func (t *cycleTracer) CaptureEnd(output []byte, gasUsed uint64, err error) {
+
 }
 
 // CaptureState implements the EVMLogger interface to trace a single step of VM execution.
 func (t *cycleTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
-	if t.isFirst {
-		t.isFirst = false
-	} else {
-		t.ReadEvents()
-	}
+	elapsedCycels := perf.StopCPUCycles(t.cb, t.fd).Value
 
 	if t.remainingGas == 0 {
 		t.remainingGas = int(gas)
@@ -97,8 +76,11 @@ func (t *cycleTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, sc
 		t.remainingGas = int(gas)
 	}
 
+	t.cycles = append(t.cycles, int(elapsedCycels))
 	t.opcodes = append(t.opcodes, op)
-	t.ResetEvents()
+	cb, fd := perf.StartCPUCycles()
+	t.cb = cb
+	t.cb = fd
 }
 
 // CaptureFault implements the EVMLogger interface to trace an execution fault.
@@ -118,8 +100,8 @@ func (t *cycleTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
 func (*cycleTracer) CaptureTxStart(gasLimit uint64) {}
 
 func (t *cycleTracer) CaptureTxEnd(restGas uint64) {
-	t.ReadEvents()
 	t.cost = append(t.cost, t.remainingGas-int(restGas))
+	perf.StopCPUCycles(t.cb, t.fd)
 }
 
 // GetResult returns an empty json object.
@@ -128,8 +110,7 @@ func (t *cycleTracer) GetResult() (json.RawMessage, error) {
 
 	// Add each key-value pair to the map
 	for i, key := range t.opcodes {
-		//TODO Add zero values if error occured
-		pair := []interface{}{key.String(), t.cycles[i], t.cacheMisses[i], t.instructions[i], t.cost[i]}
+		pair := []interface{}{key.String(), t.cycles[i], t.cost[i]}
 		pairs[i] = pair
 	}
 
@@ -146,30 +127,3 @@ func (t *cycleTracer) GetResult() (json.RawMessage, error) {
 // Stop terminates execution of the tracer at the first opportune moment.
 func (t *cycleTracer) Stop(err error) {
 }
-
-func (t *cycleTracer) ReadEvents() {
-	err := perfevents.EventsRead(t.pds)
-	if err != nil {
-		t.errors = append(t.errors, err)
-		return
-	}
-
-	// TODO Check if substraction is needed
-	// Cycles
-	t.cycles = append(t.cycles, int(t.pds[0].Data))
-
-	//Cache-misses
-	t.cacheMisses = append(t.cacheMisses, int(t.pds[1].Data))
-
-	//Instructions
-	t.instructions = append(t.instructions, int(t.pds[2].Data))
-}
-
-func (t *cycleTracer) ResetEvents() {
-	err := perfevents.EventsRead(t.pds)
-	if err != nil {
-		t.errors = append(t.errors, err)
-		return
-	}
-}
-*/
