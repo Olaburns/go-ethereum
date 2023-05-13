@@ -95,7 +95,6 @@ func (t *timingTracer) CaptureTxEnd(restGas uint64) {
 	t.cost = append(t.cost, t.remainingGas-int(restGas))
 }
 
-// GetResult returns an empty json object.
 func (t *timingTracer) GetResult() (json.RawMessage, error) {
 	pairs := make([][]interface{}, len(t.opcodes))
 
