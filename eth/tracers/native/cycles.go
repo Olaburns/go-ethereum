@@ -55,9 +55,7 @@ func newCycleTracer(ctx *tracers.Context, _ json.RawMessage) (tracers.Tracer, er
 
 // CaptureStart implements the EVMLogger interface to initialize the tracing operation.
 func (t *cycleTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
-	cb, fd := perf.StartCPUCycles()
-	t.cb = cb
-	t.cb = fd
+	t.startMeasuring()
 }
 
 // CaptureEnd is called after the call finishes to finalize the tracing.
@@ -78,6 +76,10 @@ func (t *cycleTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, sc
 
 	t.cycles = append(t.cycles, int(elapsedCycels))
 	t.opcodes = append(t.opcodes, op)
+	t.startMeasuring()
+}
+
+func (t *cycleTracer) startMeasuring() {
 	cb, fd := perf.StartCPUCycles()
 	t.cb = cb
 	t.cb = fd

@@ -17,15 +17,18 @@
 package native
 
 import (
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/tracers"
 	"io/ioutil"
+	"log"
 	"math/big"
 	"os"
 	"runtime"
+	"strconv"
 )
 
 func init() {
@@ -35,59 +38,88 @@ func init() {
 // memoryTracer is a go implementation of the Tracer interface which
 // performs no action. It's mostly useful for testing purposes.
 type memoryTracer struct {
-	heapAllocList  []int
-	heapSysList    []int
-	heapIdleList   []int
-	heapInuseList  []int
-	stackInUseList []int
-	stackSysList   []int
-	memStats       runtime.MemStats
-	opCounter      int
-	resolution     int
+	opCounter   int
+	resolution  int
+	csvFileName string
 }
 
 // newmemoryTracer returns a new noop tracer.
 func newMemoryTracer(ctx *tracers.Context, _ json.RawMessage) (tracers.Tracer, error) {
 	return &memoryTracer{
-		heapAllocList:  []int{},
-		heapSysList:    []int{},
-		heapIdleList:   []int{},
-		heapInuseList:  []int{},
-		stackInUseList: []int{},
-		stackSysList:   []int{},
-		opCounter:      0,
-		resolution:     100,
+		opCounter:   0,
+		resolution:  100,
+		csvFileName: "memoryStats.csv",
 	}, nil
 }
 
 // CaptureStart implements the EVMLogger interface to initialize the tracing operation.
 func (t *memoryTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
-	if 0 == t.opCounter%t.resolution {
-		t.addHeapProfile()
+	err := createCSV(t.csvFileName)
+	if err != nil {
+		log.Fatalf("Failed to create CSV: %v", err)
 	}
-	t.opCounter = t.opCounter + 1
 }
 
-func (t *memoryTracer) addHeapProfile() {
-	heapAlloc, heapSys, heapIdle, heapInuse, stackInUse, stackSys := t.getHeapAndStackMetrics()
+func createCSV(filename string) error {
+	file, err := os.Create(filename)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
 
-	t.heapAllocList = append(t.heapAllocList, heapAlloc)
-	t.heapSysList = append(t.heapSysList, heapSys)
-	t.heapIdleList = append(t.heapIdleList, heapIdle)
-	t.heapInuseList = append(t.heapInuseList, heapInuse)
-	t.stackInUseList = append(t.stackInUseList, stackInUse)
-	t.stackSysList = append(t.stackSysList, stackSys)
+	writer := csv.NewWriter(file)
+	defer writer.Flush()
+
+	headers := []string{"heapAlloc", "heapSys", "heapIdle", "heapInuse", "stackInUse", "stackSys"}
+	err = writer.Write(headers) // writing header
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
-func (t *memoryTracer) getHeapAndStackMetrics() (int, int, int, int, int, int) {
-	//runtime.GC() // get up-to-date statistics
-	runtime.ReadMemStats(&t.memStats)
-	return bToMb(int(t.memStats.HeapAlloc)),
-		bToMb(int(t.memStats.HeapSys)),
-		bToMb(int(t.memStats.HeapIdle)),
-		bToMb(int(t.memStats.HeapInuse)),
-		bToMb(int(t.memStats.StackInuse)),
-		bToMb(int(t.memStats.StackSys))
+func addMemStatsToCSV(filename string) error {
+	var mem runtime.MemStats
+	runtime.ReadMemStats(&mem)
+
+	file, err := os.OpenFile(filename, os.O_APPEND|os.O_WRONLY, os.ModeAppend)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	writer := csv.NewWriter(file)
+	defer writer.Flush()
+
+	stats := []string{
+		strconv.Itoa(bToMb(int(mem.HeapAlloc))),
+		strconv.Itoa(bToMb(int(mem.HeapSys))),
+		strconv.Itoa(bToMb(int(mem.HeapIdle))),
+		strconv.Itoa(bToMb(int(mem.HeapInuse))),
+		strconv.Itoa(bToMb(int(mem.StackInuse))),
+		strconv.Itoa(bToMb(int(mem.StackSys))),
+	}
+	err = writer.Write(stats) // writing stats
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func getCSVAsStringAndDelete(filename string) (string, error) {
+	bytes, err := ioutil.ReadFile(filename)
+	if err != nil {
+		return "", err
+	}
+
+	err = os.Remove(filename)
+	if err != nil {
+		return "", err
+	}
+
+	return string(bytes), nil
 }
 
 func bToMb(b int) int {
@@ -116,12 +148,21 @@ func WriteToFile(filename, content string) error {
 
 // CaptureEnd is called after the call finishes to finalize the tracing.
 func (t *memoryTracer) CaptureEnd(output []byte, gasUsed uint64, err error) {
-	t.addHeapProfile()
+	err = addMemStatsToCSV(t.csvFileName)
+	if err != nil {
+		log.Fatalf("Failed to add memory stats to CSV: %v", err)
+	}
 }
 
 // CaptureState implements the EVMLogger interface to trace a single step of VM execution.
 func (t *memoryTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
-	t.addHeapProfile()
+	if 0 == t.opCounter%t.resolution {
+		err := addMemStatsToCSV(t.csvFileName)
+		if err != nil {
+			log.Fatalf("Failed to add memory stats to CSV: %v", err)
+		}
+	}
+	t.opCounter = t.opCounter + 1
 }
 
 // CaptureFault implements the EVMLogger interface to trace an execution fault.
@@ -135,32 +176,21 @@ func (t *memoryTracer) CaptureEnter(typ vm.OpCode, from common.Address, to commo
 // CaptureExit is called when EVM exits a scope, even if the scope didn't
 // execute any code.
 func (t *memoryTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
-	t.addHeapProfile()
+
 }
 
 func (*memoryTracer) CaptureTxStart(gasLimit uint64) {}
 
-func (*memoryTracer) CaptureTxEnd(restGas uint64) {}
+func (*memoryTracer) CaptureTxEnd(restGas uint64) {
+
+}
 
 // GetResult returns an empty json object.
 func (t *memoryTracer) GetResult() (json.RawMessage, error) {
-	// Check that all lists have the same length
-	if len(t.heapAllocList) != len(t.stackInUseList) || len(t.heapAllocList) != len(t.heapSysList) ||
-		len(t.heapAllocList) != len(t.heapIdleList) || len(t.heapAllocList) != len(t.heapInuseList) || len(t.heapAllocList) != len(t.stackSysList) {
-		return nil, fmt.Errorf("all lists must have the same length")
-	}
-
-	// Prepare the slice to hold all pairs
-	pairs := make([][]int, len(t.heapAllocList))
-
-	// Combine each pair of heapAlloc, heapSys, heapIdle, heapInuse, stackInUse, and stackSys values
-	for i := range t.heapAllocList {
-		pair := []int{t.heapAllocList[i], t.heapSysList[i], t.heapIdleList[i], t.heapInuseList[i], t.stackInUseList[i], t.stackSysList[i]}
-		pairs[i] = pair
-	}
+	csvString, err := getCSVAsStringAndDelete(t.csvFileName)
 
 	// Encode the slice of slices to JSON
-	jsonBytes, err := json.Marshal(pairs)
+	jsonBytes, err := json.Marshal(csvString)
 	if err != nil {
 		return json.RawMessage(`{}`), err
 	}
