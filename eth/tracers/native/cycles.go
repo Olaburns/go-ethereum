@@ -90,7 +90,7 @@ func (t *cycleTracer) startMeasuring() {
 		fmt.Println("StopCPUCycles failed:", err)
 	}
 	t.cb = cb
-	t.cb = fd
+	t.fd = fd
 }
 
 // CaptureFault implements the EVMLogger interface to trace an execution fault.
