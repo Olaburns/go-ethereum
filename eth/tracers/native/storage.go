@@ -1,6 +1,3 @@
-//go:build linux
-// +build linux
-
 // Copyright 2021 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
@@ -19,8 +16,8 @@
 
 package native
 
-import "C"
 import (
+	"bufio"
 	"bytes"
 	"encoding/csv"
 	"encoding/json"
@@ -28,13 +25,10 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/tracers"
-	"github.com/square/inspect/metrics"
-	"github.com/square/inspect/os/pidstat"
 	"math/big"
 	"os"
 	"strconv"
 	"strings"
-	"time"
 )
 
 func init() {
@@ -44,60 +38,85 @@ func init() {
 // storageTracer is a go implementation of the Tracer interface which
 // performs no action. It's mostly useful for testing purposes.
 type storageTracer struct {
-	pMetrics     *pidstat.PerProcessStatMetrics
-	IOReadBytes  []float64
-	IOWriteBytes []float64
-	IOUsage      []float64
+	PIOMetrics []*ProcIO
 }
 
 // newstorageTracer returns a new noop tracer.
 func newStorageTracer(ctx *tracers.Context, _ json.RawMessage) (tracers.Tracer, error) {
 	return &storageTracer{
-		IOReadBytes:  []float64{},
-		IOWriteBytes: []float64{},
-		IOUsage:      []float64{},
+		PIOMetrics: []*ProcIO{},
 	}, nil
 }
 
-func (t *storageTracer) createProcessStats() {
-	m := metrics.NewMetricContext("system")
-	pstat := pidstat.NewProcessStat(m, time.Millisecond*50)
-	pstat.Collect()
-	pid := strconv.Itoa(os.Getpid())
-	WriteToFile("pid.txt", pid)
-	WriteToFile("pid_list.txt", joinMapValues(pstat.Processes))
-	pMetrics := pstat.Processes[pid].Metrics
-
-	WriteToFile("log.txt", "I am here")
-
-	t.pMetrics = pMetrics
+type ProcIO struct {
+	Rchar               int64
+	Wchar               int64
+	Syscr               int64
+	Syscw               int64
+	ReadBytes           int64
+	WriteBytes          int64
+	CancelledWriteBytes int64
 }
 
 func (t *storageTracer) readProcessStats() {
-	WriteToFile("log.txt", t.pMetrics.Pid)
-	t.pMetrics.Collect()
-	o := t.pMetrics
-	t.IOReadBytes = append(t.IOReadBytes, o.IOReadBytes.ComputeRate())
-	t.IOWriteBytes = append(t.IOWriteBytes, o.IOWriteBytes.ComputeRate())
-	t.IOUsage = append(t.IOUsage, o.IOReadBytes.ComputeRate()+o.IOWriteBytes.ComputeRate())
+	pid := os.Getpid()
+	pidStr := strconv.Itoa(pid)
+	pMetrics, err := ReadProcIO(pidStr)
+	if err != nil {
+		fmt.Errorf("Can not read metrics %v", err)
+	}
+	t.PIOMetrics = append(t.PIOMetrics, pMetrics)
 }
 
-func joinMapValues(m map[string]*pidstat.PerProcessStat) string {
-	var sb strings.Builder
+func ReadProcIO(pid string) (*ProcIO, error) {
+	file, err := os.Open(fmt.Sprintf("/proc/%s/io", pid))
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
 
-	for _, value := range m {
-		// Each value starts in a new line
-		sb.WriteString("\n")
-		sb.WriteString(value.Metrics.Pid)
+	scanner := bufio.NewScanner(file)
+	result := &ProcIO{}
+	for scanner.Scan() {
+		line := scanner.Text()
+		parts := strings.Split(line, ": ")
+		if len(parts) != 2 {
+			continue
+		}
+
+		value, err := strconv.ParseInt(parts[1], 10, 64)
+		if err != nil {
+			continue
+		}
+
+		switch parts[0] {
+		case "rchar":
+			result.Rchar = value
+		case "wchar":
+			result.Wchar = value
+		case "syscr":
+			result.Syscr = value
+		case "syscw":
+			result.Syscw = value
+		case "read_bytes":
+			result.ReadBytes = value
+		case "write_bytes":
+			result.WriteBytes = value
+		case "cancelled_write_bytes":
+			result.CancelledWriteBytes = value
+		}
 	}
 
-	return sb.String()
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+
+	return result, nil
 }
 
 // CaptureStart implements the EVMLogger interface to initialize the tracing operation.
 func (t *storageTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
-	t.createProcessStats()
-
+	t.readProcessStats()
 }
 
 // CaptureEnd is called after the call finishes to finalize the tracing.
@@ -129,7 +148,7 @@ func (*storageTracer) CaptureTxEnd(restGas uint64) {}
 
 // GetResult returns an empty json object.
 func (t *storageTracer) GetResult() (json.RawMessage, error) {
-	csvString, err := ArraysToCSV(t.IOReadBytes, t.IOWriteBytes, t.IOUsage)
+	csvString, err := procIOToCSV(t.PIOMetrics)
 
 	// Encode the slice of slices to JSON
 	jsonBytes, err := json.Marshal(csvString)
@@ -145,39 +164,41 @@ func (t *storageTracer) GetResult() (json.RawMessage, error) {
 func (t *storageTracer) Stop(err error) {
 }
 
-func ArraysToCSV(ioReadBytes []float64, ioWriteBytes []float64, ioUsage []float64) (string, error) {
-	// Checking if all slices have the same length
-	if len(ioReadBytes) != len(ioWriteBytes) || len(ioWriteBytes) != len(ioUsage) {
-		return "", fmt.Errorf("all input slices should have the same length")
-	}
-
+func procIOToCSV(procIOs []*ProcIO) (string, error) {
+	// Create a buffer to write our output to
 	b := &bytes.Buffer{}
+
+	// Create a CSV writer that writes to our buffer
 	writer := csv.NewWriter(b)
 
-	// Write the headers to the csv
-	err := writer.Write([]string{"IOReadBytes", "IOWriteBytes", "IOUsage"})
-	if err != nil {
+	// Write the header to the CSV file
+	if err := writer.Write([]string{"Rchar", "Wchar", "Syscr", "Syscw", "ReadBytes", "WriteBytes"}); err != nil {
 		return "", err
 	}
 
-	// Loop through the slices and write the data to the csv
-	for i := range ioReadBytes {
-		row := []string{
-			strconv.FormatFloat(ioReadBytes[i], 'f', -1, 64),
-			strconv.FormatFloat(ioWriteBytes[i], 'f', -1, 64),
-			strconv.FormatFloat(ioUsage[i], 'f', -1, 64),
+	// Iterate through the input and write each ProcIO's data to the CSV writer
+	for _, procIO := range procIOs {
+		record := []string{
+			strconv.FormatInt(procIO.Rchar, 10),
+			strconv.FormatInt(procIO.Wchar, 10),
+			strconv.FormatInt(procIO.Syscr, 10),
+			strconv.FormatInt(procIO.Syscw, 10),
+			strconv.FormatInt(procIO.ReadBytes, 10),
+			strconv.FormatInt(procIO.WriteBytes, 10),
 		}
-		err := writer.Write(row)
-		if err != nil {
+		if err := writer.Write(record); err != nil {
 			return "", err
 		}
 	}
+
+	// Flush any remaining data from the writer to the buffer
 	writer.Flush()
 
-	// Check for any error occurred while writing
+	// Check for any error that occurred during the write
 	if err := writer.Error(); err != nil {
 		return "", err
 	}
 
+	// Convert the buffer's contents to a string and return it
 	return b.String(), nil
 }
