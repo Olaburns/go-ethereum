@@ -89,7 +89,7 @@ func TestCallTracerNative(t *testing.T) {
 }
 
 func TestCallTracerNativeWithLog(t *testing.T) {
-	testCallTracer("callTracer", "call_tracer_withLog", t)
+	testCallTracer("cycleTracer", "call_tracer_withLog", t)
 }
 
 func testCallTracer(tracerName string, dirPath string, t *testing.T) {
