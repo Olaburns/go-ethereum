@@ -39,12 +39,16 @@ func init() {
 // performs no action. It's mostly useful for testing purposes.
 type storageTracer struct {
 	PIOMetrics []*ProcIO
+	resolution int
+	opCounter  int
 }
 
 // newstorageTracer returns a new noop tracer.
 func newStorageTracer(ctx *tracers.Context, _ json.RawMessage) (tracers.Tracer, error) {
 	return &storageTracer{
 		PIOMetrics: []*ProcIO{},
+		resolution: 100,
+		opCounter:  0,
 	}, nil
 }
 
@@ -126,7 +130,10 @@ func (t *storageTracer) CaptureEnd(output []byte, gasUsed uint64, err error) {
 
 // CaptureState implements the EVMLogger interface to trace a single step of VM execution.
 func (t *storageTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
-	t.readProcessStats()
+	if 0 == t.opCounter%t.resolution {
+		t.readProcessStats()
+	}
+	t.opCounter = t.opCounter + 1
 }
 
 // CaptureFault implements the EVMLogger interface to trace an execution fault.
