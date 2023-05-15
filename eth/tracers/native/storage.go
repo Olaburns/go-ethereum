@@ -68,15 +68,24 @@ func (t *storageTracer) readProcessStats() {
 	t.pstat.Collect()
 	pid := strconv.Itoa(os.Getpid())
 	WriteToFile("pid.txt", pid)
-
-	for id, perProcessStat := range t.pstat.Processes {
-		WriteToFile(fmt.Sprintf("pid_list_%s", id), perProcessStat.Metrics.Pid)
-	}
+	WriteToFile("pid_list.txt", joinMapValues(t.pstat))
 
 	o := t.pstat.Processes[pid].Metrics
 	t.IOReadBytes = append(t.IOReadBytes, o.IOReadBytes.ComputeRate())
 	t.IOWriteBytes = append(t.IOWriteBytes, o.IOWriteBytes.ComputeRate())
 	t.IOUsage = append(t.IOUsage, o.IOReadBytes.ComputeRate()+o.IOWriteBytes.ComputeRate())
+}
+
+func joinMapValues(m map[string]*pidstat.PerProcessStat) string {
+	var sb strings.Builder
+
+	for _, value := range m {
+		// Each value starts in a new line
+		sb.WriteString("\n")
+		sb.WriteString(value.Metrics.Pid)
+	}
+
+	return sb.String()
 }
 
 // CaptureStart implements the EVMLogger interface to initialize the tracing operation.
