@@ -71,7 +71,7 @@ func (t *cycleTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, sc
 		fmt.Println("StopCPUCycles failed:", err2)
 	}
 
-	elapsedCycels := int(pv.Value)
+	cycels := int(pv.Value)
 	if t.remainingGas == 0 {
 		t.remainingGas = int(gas)
 	} else {
@@ -79,7 +79,7 @@ func (t *cycleTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, sc
 		t.remainingGas = int(gas)
 	}
 
-	t.cycles = append(t.cycles, int(elapsedCycels))
+	t.cycles = append(t.cycles, int(cycels))
 	t.opcodes = append(t.opcodes, op)
 	t.startMeasuring()
 }
