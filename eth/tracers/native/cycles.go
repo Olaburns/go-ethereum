@@ -85,7 +85,10 @@ func (t *cycleTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, sc
 }
 
 func (t *cycleTracer) startMeasuring() {
-	cb, fd := perf.StartCPUCycles()
+	cb, fd, err := perf.StartCPUCycles()
+	if err != nil {
+		fmt.Println("StopCPUCycles failed:", err)
+	}
 	t.cb = cb
 	t.cb = fd
 }
