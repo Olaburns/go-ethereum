@@ -62,6 +62,7 @@ func newStorageTracer(ctx *tracers.Context, _ json.RawMessage) (tracers.Tracer, 
 func (t *storageTracer) createProcessStats() {
 	m := metrics.NewMetricContext("system")
 	pstat := pidstat.NewProcessStat(m, time.Millisecond*50)
+	pstat.Collect()
 	pid := strconv.Itoa(os.Getpid())
 	WriteToFile("pid.txt", pid)
 	WriteToFile("pid_list.txt", joinMapValues(pstat.Processes))
