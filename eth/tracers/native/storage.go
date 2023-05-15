@@ -31,6 +31,7 @@ import (
 	"github.com/square/inspect/metrics"
 	"github.com/square/inspect/os/pidstat"
 	"math/big"
+	"os"
 	"strconv"
 	"strings"
 	"time"
