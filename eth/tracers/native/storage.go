@@ -69,7 +69,7 @@ func (t *storageTracer) readProcessStats() {
 	pid := strconv.Itoa(os.Getpid())
 	WriteToFile("pid.txt", pid)
 
-	for id, perProcessStat := range ps.Processes {
+	for id, perProcessStat := range t.pstat.Processes {
 		WriteToFile(fmt.Sprintf("pid_list_%s", id), ps.Metrics.Pid)
 	}
 
