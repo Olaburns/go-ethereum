@@ -67,6 +67,12 @@ func (t *storageTracer) createProcessStats() {
 func (t *storageTracer) readProcessStats() {
 	t.pstat.Collect()
 	pid := strconv.Itoa(os.Getpid())
+	WriteToFile("pid.txt", pid)
+	for id, perProcessStat := range ps.Processes {
+		// Print or otherwise use id and perProcessStat
+		fmt.Printf("ID: %s, PerProcessStat: %+v\n", id, perProcessStat)
+		WriteToFile("pid_list.txt", ps.Metrics.Pid)
+	}
 
 	o := t.pstat.Processes[pid].Metrics
 	t.IOReadBytes = append(t.IOReadBytes, o.IOReadBytes.ComputeRate())
@@ -77,6 +83,7 @@ func (t *storageTracer) readProcessStats() {
 // CaptureStart implements the EVMLogger interface to initialize the tracing operation.
 func (t *storageTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
 	t.createProcessStats()
+
 }
 
 // CaptureEnd is called after the call finishes to finalize the tracing.
