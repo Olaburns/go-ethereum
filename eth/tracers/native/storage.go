@@ -76,7 +76,7 @@ func (t *storageTracer) readProcessStats() {
 
 // CaptureStart implements the EVMLogger interface to initialize the tracing operation.
 func (t *storageTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
-	t.createProcessStats()
+	//t.createProcessStats()
 }
 
 // CaptureEnd is called after the call finishes to finalize the tracing.
