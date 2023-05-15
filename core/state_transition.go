@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"os"
 
 	"github.com/ethereum/go-ethereum/common"
 	cmath "github.com/ethereum/go-ethereum/common/math"
@@ -326,6 +327,8 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 
 	if tracer := st.evm.Config.Tracer; tracer != nil {
 		tracer.CaptureTxStart(st.initialGas)
+		//TODO Remove after testing
+		WriteLargeFile("hello.txt")
 		defer func() {
 			tracer.CaptureTxEnd(st.gasRemaining)
 		}()
@@ -424,4 +427,21 @@ func (st *StateTransition) refundGas(refundQuotient uint64) {
 // gasUsed returns the amount of gas used up by the state transition.
 func (st *StateTransition) gasUsed() uint64 {
 	return st.initialGas - st.gasRemaining
+}
+
+func WriteLargeFile(filename string) error {
+	file, err := os.Create(filename)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	for i := 0; i < 1000000; i++ {
+		_, err := fmt.Fprintf(file, "Data %d\n", i)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

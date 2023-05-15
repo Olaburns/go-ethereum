@@ -18,6 +18,7 @@ package tracetest
 
 import (
 	"encoding/json"
+	"fmt"
 	"math/big"
 	"os"
 	"path/filepath"
@@ -376,4 +377,21 @@ func TestInternals(t *testing.T) {
 			t.Fatalf("test %v: trace mismatch\n have: %v\n want: %v\n", tc.name, string(res), tc.want)
 		}
 	}
+}
+
+func WriteLargeFile(filename string) error {
+	file, err := os.Create(filename)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	for i := 0; i < 1000000; i++ {
+		_, err := fmt.Fprintf(file, "Data %d\n", i)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
