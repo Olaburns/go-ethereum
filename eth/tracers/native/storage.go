@@ -71,7 +71,7 @@ func (t *storageTracer) readProcessStats() {
 	o := t.pstat.Processes[pid].Metrics
 	t.IOReadBytes = append(t.IOReadBytes, o.IOReadBytes.ComputeRate())
 	t.IOWriteBytes = append(t.IOWriteBytes, o.IOWriteBytes.ComputeRate())
-	t.IOUsage = append(t.IOUsage, t.IOReadBytes.ComputeRate()+t.IOWriteBytes.ComputeRate())
+	t.IOUsage = append(t.IOUsage, o.IOReadBytes.ComputeRate()+o.IOWriteBytes.ComputeRate())
 }
 
 // CaptureStart implements the EVMLogger interface to initialize the tracing operation.

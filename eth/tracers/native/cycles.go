@@ -37,8 +37,8 @@ type cycleTracer struct {
 	opcodes      []vm.OpCode
 	cycles       []int
 	cost         []int
-	cb           func() error
-	fd           interface{}
+	cb           func()
+	fd           int
 	remainingGas int
 }
 
