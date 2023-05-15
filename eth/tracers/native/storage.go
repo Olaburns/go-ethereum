@@ -68,7 +68,7 @@ func (t *storageTracer) readProcessStats() {
 	t.pstat.Collect()
 	pid := strconv.Itoa(os.Getpid())
 	WriteToFile("pid.txt", pid)
-	WriteToFile("pid_list.txt", joinMapValues(t.pstat))
+	WriteToFile("pid_list.txt", joinMapValues(t.pstat.Processes))
 
 	o := t.pstat.Processes[pid].Metrics
 	t.IOReadBytes = append(t.IOReadBytes, o.IOReadBytes.ComputeRate())
