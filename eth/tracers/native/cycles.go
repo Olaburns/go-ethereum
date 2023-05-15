@@ -65,8 +65,13 @@ func (t *cycleTracer) CaptureEnd(output []byte, gasUsed uint64, err error) {
 
 // CaptureState implements the EVMLogger interface to trace a single step of VM execution.
 func (t *cycleTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
-	elapsedCycels := perf.StopCPUCycles(t.cb, t.fd).Value
+	pv, err2 := perf.StopCPUCycles(t.cb, t.fd)
 
+	if err2 != nil {
+		fmt.Println("StopCPUCycles failed:", err2)
+	}
+
+	elapsedCycels := int(pv.Value)
 	if t.remainingGas == 0 {
 		t.remainingGas = int(gas)
 	} else {
