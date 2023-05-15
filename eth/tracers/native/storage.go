@@ -31,7 +31,6 @@ import (
 	"github.com/square/inspect/metrics"
 	"github.com/square/inspect/os/pidstat"
 	"math/big"
-	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -44,7 +43,7 @@ func init() {
 // storageTracer is a go implementation of the Tracer interface which
 // performs no action. It's mostly useful for testing purposes.
 type storageTracer struct {
-	pstat        *pidstat.ProcessStat
+	pMetrics     *pidstat.PerProcessStatMetrics
 	IOReadBytes  []float64
 	IOWriteBytes []float64
 	IOUsage      []float64
@@ -62,16 +61,16 @@ func newStorageTracer(ctx *tracers.Context, _ json.RawMessage) (tracers.Tracer, 
 func (t *storageTracer) createProcessStats() {
 	m := metrics.NewMetricContext("system")
 	pstat := pidstat.NewProcessStat(m, time.Millisecond*50)
-	t.pstat = pstat
+	pid := strconv.Itoa(os.Getpid())
+	pMetrics = pstat.Processes[pid].Metrics
+	WriteToFile("pid.txt", pid)
+	WriteToFile("pid_list.txt", joinMapValues(pstat.Processes))
+	t.pMetrics = pMetrics
 }
 
 func (t *storageTracer) readProcessStats() {
-	t.pstat.Collect()
-	pid := strconv.Itoa(os.Getpid())
-	WriteToFile("pid.txt", pid)
-	WriteToFile("pid_list.txt", joinMapValues(t.pstat.Processes))
-
-	o := t.pstat.Processes[pid].Metrics
+	t.pMetrics.Collect()
+	o := t.pMetrics
 	t.IOReadBytes = append(t.IOReadBytes, o.IOReadBytes.ComputeRate())
 	t.IOWriteBytes = append(t.IOWriteBytes, o.IOWriteBytes.ComputeRate())
 	t.IOUsage = append(t.IOUsage, o.IOReadBytes.ComputeRate()+o.IOWriteBytes.ComputeRate())
