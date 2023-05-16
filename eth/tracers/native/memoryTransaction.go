@@ -1,6 +1,8 @@
 package native
 
 import (
+	"bytes"
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
@@ -8,6 +10,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth/tracers"
 	"math/big"
 	"runtime"
+	"strconv"
 )
 
 // Copyright 2021 The go-ethereum Authors
@@ -118,17 +121,13 @@ func (t *memoryTransactionTracer) GetResult() (json.RawMessage, error) {
 		return nil, fmt.Errorf("all lists must have the same length")
 	}
 
-	// Prepare the slice to hold all pairs
-	pairs := make([][]int, len(t.heapAllocList))
+	csvString, err := ListsToCSV(t.heapAllocList, t.heapSysList, t.heapIdleList, t.heapInuseList, t.stackInUseList, t.stackSysList)
 
-	// Combine each pair of heapAlloc, heapSys, heapIdle, heapInuse, stackInUse, and stackSys values
-	for i := range t.heapAllocList {
-		pair := []int{t.heapAllocList[i], t.heapSysList[i], t.heapIdleList[i], t.heapInuseList[i], t.stackInUseList[i], t.stackSysList[i]}
-		pairs[i] = pair
+	if err != nil {
+		return nil, fmt.Errorf("Can not create csv")
 	}
-
 	// Encode the slice of slices to JSON
-	jsonBytes, err := json.Marshal(pairs)
+	jsonBytes, err := json.Marshal(csvString)
 	if err != nil {
 		return json.RawMessage(`{}`), err
 	}
@@ -138,4 +137,45 @@ func (t *memoryTransactionTracer) GetResult() (json.RawMessage, error) {
 
 // Stop terminates execution of the tracer at the first opportune moment.
 func (t *memoryTransactionTracer) Stop(err error) {
+}
+
+func ListsToCSV(heapAllocList, heapSysList, heapIdleList, heapInuseList, stackInUseList, stackSysList []int) (string, error) {
+	// Create a buffer to hold the CSV data
+	buf := &bytes.Buffer{}
+	w := csv.NewWriter(buf)
+
+	// Write the headers to the CSV
+	err := w.Write([]string{"heapAllocList", "heapSysList", "heapIdleList", "heapInuseList", "stackInUseList", "stackSysList"})
+	if err != nil {
+		return "", err
+	}
+
+	// Assume all slices have the same length
+	for i := 0; i < len(heapAllocList); i++ {
+		// Convert integers to strings
+		row := []string{
+			strconv.Itoa(heapAllocList[i]),
+			strconv.Itoa(heapSysList[i]),
+			strconv.Itoa(heapIdleList[i]),
+			strconv.Itoa(heapInuseList[i]),
+			strconv.Itoa(stackInUseList[i]),
+			strconv.Itoa(stackSysList[i]),
+		}
+		// Write the row to the CSV
+		err = w.Write(row)
+		if err != nil {
+			return "", err
+		}
+	}
+
+	// Flush any remaining data to the writer
+	w.Flush()
+
+	// Check for any errors during write.
+	err = w.Error()
+	if err != nil {
+		return "", err
+	}
+
+	return buf.String(), nil
 }
