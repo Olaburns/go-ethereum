@@ -76,12 +76,12 @@ func (t *memoryTransactionTracer) addHeapProfile() {
 func (t *memoryTransactionTracer) getHeapAndStackMetrics() (int, int, int, int, int, int) {
 	//runtime.GC() // get up-to-date statistics
 	runtime.ReadMemStats(&t.memStats)
-	return bToMb(int(t.memStats.HeapAlloc)),
-		bToMb(int(t.memStats.HeapSys)),
-		bToMb(int(t.memStats.HeapIdle)),
-		bToMb(int(t.memStats.HeapInuse)),
-		bToMb(int(t.memStats.StackInuse)),
-		bToMb(int(t.memStats.StackSys))
+	return int(t.memStats.HeapAlloc),
+		int(t.memStats.HeapSys),
+		int(t.memStats.HeapIdle),
+		int(t.memStats.HeapInuse),
+		int(t.memStats.StackInuse),
+		int(t.memStats.StackSys)
 }
 
 // WriteToFile writes the content to the specified filename

@@ -93,12 +93,12 @@ func addMemStatsToCSV(filename string) error {
 	defer writer.Flush()
 
 	stats := []string{
-		strconv.Itoa(bToMb(int(mem.HeapAlloc))),
-		strconv.Itoa(bToMb(int(mem.HeapSys))),
-		strconv.Itoa(bToMb(int(mem.HeapIdle))),
-		strconv.Itoa(bToMb(int(mem.HeapInuse))),
-		strconv.Itoa(bToMb(int(mem.StackInuse))),
-		strconv.Itoa(bToMb(int(mem.StackSys))),
+		strconv.Itoa(int(mem.HeapAlloc)),
+		strconv.Itoa(int(mem.HeapSys)),
+		strconv.Itoa(int(mem.HeapIdle)),
+		strconv.Itoa(int(mem.HeapInuse)),
+		strconv.Itoa(int(mem.StackInuse)),
+		strconv.Itoa(int(mem.StackSys)),
 	}
 	err = writer.Write(stats) // writing stats
 	if err != nil {
@@ -120,10 +120,6 @@ func getCSVAsStringAndDelete(filename string) (string, error) {
 	}
 
 	return string(bytes), nil
-}
-
-func bToMb(b int) int {
-	return b / 1024 / 1024
 }
 
 // WriteToFile writes the content to the specified filename
