@@ -17,12 +17,16 @@
 package native
 
 import (
+	"bytes"
+	"encoding/csv"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/tracers"
 	"math/big"
+	"strconv"
 	"time"
 )
 
@@ -96,16 +100,9 @@ func (t *timingTracer) CaptureTxEnd(restGas uint64) {
 }
 
 func (t *timingTracer) GetResult() (json.RawMessage, error) {
-	pairs := make([][]interface{}, len(t.opcodes))
-
-	// Add each key-value pair to the map
-	for i, key := range t.opcodes {
-		pair := []interface{}{key.String(), t.timings[i], t.cost[i]}
-		pairs[i] = pair
-	}
-
+	csvData, err := TimingDataToCSV(t.opcodes, t.timings, t.cost)
 	// Encode the slice of slices to JSON
-	jsonBytes, err := json.Marshal(pairs)
+	jsonBytes, err := json.Marshal(csvData)
 	if err != nil {
 		fmt.Println(err)
 		return json.RawMessage(`{}`), err
@@ -116,4 +113,45 @@ func (t *timingTracer) GetResult() (json.RawMessage, error) {
 
 // Stop terminates execution of the tracer at the first opportune moment.
 func (t *timingTracer) Stop(err error) {
+}
+
+func TimingDataToCSV(opcodes []vm.OpCode, timings, cost []int) (string, error) {
+	// Check if all slices have the same length
+	if len(opcodes) != len(timings) || len(timings) != len(cost) {
+		return "", errors.New("all slices must have the same length")
+	}
+
+	// Create a buffer to hold the CSV data
+	buf := &bytes.Buffer{}
+	w := csv.NewWriter(buf)
+
+	// Write the headers to the CSV
+	err := w.Write([]string{"opcodes", "time", "cost"})
+	if err != nil {
+		return "", err
+	}
+
+	// Write data to CSV
+	for i := 0; i < len(opcodes); i++ {
+		row := []string{
+			opcodes[i].String(),
+			strconv.Itoa(timings[i]),
+			strconv.Itoa(cost[i]),
+		}
+		err = w.Write(row)
+		if err != nil {
+			return "", err
+		}
+	}
+
+	// Flush any remaining data to the writer
+	w.Flush()
+
+	// Check for any errors during write
+	err = w.Error()
+	if err != nil {
+		return "", err
+	}
+
+	return buf.String(), nil
 }
