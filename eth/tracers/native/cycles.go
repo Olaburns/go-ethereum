@@ -20,13 +20,17 @@
 package native
 
 import (
+	"bytes"
+	"encoding/csv"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/Olaburns/perf-utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/tracers"
 	"math/big"
+	"strconv"
 )
 
 func init() {
@@ -116,7 +120,7 @@ func (t *cycleTracer) CaptureTxEnd(restGas uint64) {
 
 // GetResult returns an empty json object.
 func (t *cycleTracer) GetResult() (json.RawMessage, error) {
-	csvData, err := CycelsToCSV(t.opcodes, t.cycles, t.cost)
+	csvData, err := CyclesToCSV(t.opcodes, t.cycles, t.cost)
 
 	// Encode the slice of slices to JSON
 	jsonBytes, err := json.Marshal(csvData)
