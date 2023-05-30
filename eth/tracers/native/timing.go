@@ -40,6 +40,7 @@ type timingTracer struct {
 	cost         []int
 	time         time.Time
 	remainingGas int
+	opcodeCosts  *OpcodeCosts
 }
 
 // newTimingTracer returns a new noop tracer.
@@ -48,6 +49,7 @@ func newTimingTracer(ctx *tracers.Context, _ json.RawMessage) (tracers.Tracer, e
 		opcodes:      []vm.OpCode{},
 		timings:      []int{},
 		remainingGas: 0,
+		opcodeCosts:  NewOpcodeCosts(),
 	}
 
 	return t, nil
@@ -66,11 +68,16 @@ func (t *timingTracer) CaptureEnd(output []byte, gasUsed uint64, err error) {
 // CaptureState implements the EVMLogger interface to trace a single step of VM execution.
 func (t *timingTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
 	elapsedTime := time.Since(t.time)
-
 	if t.remainingGas == 0 {
 		t.remainingGas = int(gas)
 	} else {
-		t.cost = append(t.cost, t.remainingGas-int(gas))
+		gasCost := t.remainingGas - int(gas)
+		adaptedCost, exists := t.opcodeCosts.AddAndGetCost(op, gasCost)
+		if !exists {
+			// If the opcode does not exist, set the cost to one to avoid div with 0
+			adaptedCost = 1
+		}
+		t.cost = append(t.cost, adaptedCost)
 		t.remainingGas = int(gas)
 	}
 
