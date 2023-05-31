@@ -47,7 +47,7 @@ type memoryTracer struct {
 func newMemoryTracer(ctx *tracers.Context, _ json.RawMessage) (tracers.Tracer, error) {
 	return &memoryTracer{
 		opCounter:   0,
-		resolution:  100,
+		resolution:  1,
 		csvFileName: "memoryStats.csv",
 	}, nil
 }

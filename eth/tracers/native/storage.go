@@ -50,7 +50,7 @@ type storageTracer struct {
 func newStorageTracer(ctx *tracers.Context, _ json.RawMessage) (tracers.Tracer, error) {
 	return &storageTracer{
 		PIOMetrics: []*ProcIO{},
-		resolution: 100,
+		resolution: 1,
 		opCounter:  0,
 	}, nil
 }
