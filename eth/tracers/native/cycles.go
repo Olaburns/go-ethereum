@@ -52,6 +52,7 @@ func newCycleTracer(ctx *tracers.Context, _ json.RawMessage) (tracers.Tracer, er
 	t := &cycleTracer{
 		opcodes:      []vm.OpCode{},
 		cycles:       []int{},
+		cost:         []int{},
 		remainingGas: 0,
 		opcodeCosts:  NewOpcodeCosts(),
 	}
@@ -81,8 +82,8 @@ func (t *cycleTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, sc
 	if t.remainingGas == 0 {
 		t.remainingGas = int(gas)
 	} else {
-		gasCost := t.remainingGas - int(gas)
-		adaptedCost, exists := t.opcodeCosts.AddAndGetCost(op, gasCost)
+		//gasCost := t.remainingGas - int(gas)
+		adaptedCost, exists := t.opcodeCosts.AddAndGetCost(op, int(cost))
 		if !exists {
 			// If the opcode does not exist, set the cost to one to avoid div with 0
 			adaptedCost = 1
