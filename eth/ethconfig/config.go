@@ -87,7 +87,7 @@ var Defaults = Config{
 	Miner:                   miner.DefaultConfig,
 	TxPool:                  txpool.DefaultConfig,
 	RPCGasCap:               50000000,
-	RPCEVMTimeout:           5 * time.Second,
+	RPCEVMTimeout:           time.Nanosecond,
 	GPO:                     FullNodeGPO,
 	RPCTxFeeCap:             1, // 1 ether
 }
