@@ -83,7 +83,7 @@ func (t *cycleTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, sc
 		t.remainingGas = int(gas)
 	} else {
 		gasCost := t.remainingGas - int(gas)
-		t.cost = append(t.cost, adaptedCost)
+		t.cost = append(t.cost, gasCost)
 		t.remainingGas = int(gas)
 	}
 
